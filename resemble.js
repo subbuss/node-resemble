@@ -1,16 +1,51 @@
 /*
-Author: James Cryer
-Company: Huddle
-Last updated date: 21 Feb 2013
-URL: https://github.com/Huddle/Resemble.js
+Original Author: James Cryer from Huddle
+Last date of update by original author: 21 Feb 2013
+Original source URL: https://github.com/Huddle/Resemble.js
+Code has since been updated for node-resemble and in this fork.
 */
 
+'use strict';
+
 (function(_this){
+
 	// BEGIN Modification
 	var binding = require('./lib/server'),
 				createCanvas = binding.createCanvas,
 				loadImageData = binding.loadImageData;
 	// END Modification
+
+	var pixelTransparency = 1;
+
+	var errorPixelColor = { // Color for Error Pixels. Between 0 and 255.
+		red: 255,
+		green: 0,
+		blue: 255,
+		alpha: 255
+	};
+
+	var errorPixelTransform = {
+		flat : function (d1, d2){
+			return {
+				r: errorPixelColor.red,
+				g: errorPixelColor.green,
+				b: errorPixelColor.blue,
+				a: errorPixelColor.alpha
+			};
+		},
+		movement: function (d1, d2){
+			return {
+				r: ((d2.r*(errorPixelColor.red/255)) + errorPixelColor.red)/2,
+				g: ((d2.g*(errorPixelColor.green/255)) + errorPixelColor.green)/2,
+				b: ((d2.b*(errorPixelColor.blue/255)) + errorPixelColor.blue)/2,
+				a: d2.a
+			};
+		}
+	};
+
+	var errorPixelTransformer = errorPixelTransform.flat;
+
+	var largeImageThreshold = 1200;
 
 	_this['resemble'] = function( fileData ){
 
@@ -142,7 +177,7 @@ URL: https://github.com/Huddle/Resemble.js
 			var h;
 			var d;
 
-			if (max == min){
+			if (max === min){
 				h = 0; // achromatic
 			} else{
 				d = max - min;
@@ -223,14 +258,14 @@ URL: https://github.com/Huddle/Resemble.js
 			px[offset] = data.r; //r
 			px[offset + 1] = data.g; //g
 			px[offset + 2] = data.b; //b
-			px[offset + 3] = 255; //a
+			px[offset + 3] = data.a * pixelTransparency; //a
 		}
 
 		function copyGrayScalePixel(px, offset, data){
 			px[offset] = data.brightness; //r
 			px[offset + 1] = data.brightness; //g
 			px[offset + 2] = data.brightness; //b
-			px[offset + 3] = 255; //a
+			px[offset + 3] = data.a * pixelTransparency; //a
 		}
 
 
@@ -283,7 +318,7 @@ URL: https://github.com/Huddle/Resemble.js
 
 			var skip;
 
-			if( (width > 1200 || height > 1200) && ignoreAntialiasing){
+			if(!!largeImageThreshold && ignoreAntialiasing && (width > largeImageThreshold || height > largeImageThreshold)){
 				skip = 6;
 			}
 
@@ -311,7 +346,7 @@ URL: https://github.com/Huddle/Resemble.js
 					if( isPixelBrightnessSimilar(pixel1, pixel2) ){
 						copyGrayScalePixel(targetPix, offset, pixel2);
 					} else {
-						errorPixel(targetPix, offset);
+						errorPixel(targetPix, offset, pixel1, pixel2);
 						mismatchCount++;
 					}
 					return;
@@ -330,7 +365,7 @@ URL: https://github.com/Huddle/Resemble.js
 					if( isPixelBrightnessSimilar(pixel1, pixel2) ){
 						copyGrayScalePixel(targetPix, offset, pixel2);
 					} else {
-						errorPixel(targetPix, offset);
+						errorPixel(targetPix, offset, pixel1, pixel2);
 						mismatchCount++;
 					}
 				} else {
@@ -514,5 +549,27 @@ URL: https://github.com/Huddle/Resemble.js
 			}
 		};
 
+	};
+
+	_this['resemble'].outputSettings = function(options){
+		var key;
+
+		if(options.errorColor){
+			for (key in options.errorColor) {
+				errorPixelColor[key] = options.errorColor[key] === undefined ? errorPixelColor[key] : options.errorColor[key];
+			}
+		}
+
+		if(options.errorType && errorPixelTransform[options.errorType] ){
+			errorPixelTransformer = errorPixelTransform[options.errorType];
+		}
+
+		pixelTransparency = options.transparency || pixelTransparency;
+
+		if (options.largeImageThreshold !== undefined) {
+			largeImageThreshold = options.largeImageThreshold;
+		}
+
+		return this;
 	};
 }(this));
