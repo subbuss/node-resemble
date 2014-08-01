@@ -57,6 +57,7 @@ Code has since been updated for node-resemble and in this fork.
 			red: 16,
 			green: 16,
 			blue: 16,
+			alpha: 16,
 			minBrightness: 16,
 			maxBrightness: 240
 		};
@@ -86,7 +87,7 @@ Code has since been updated for node-resemble and in this fork.
 
 		function parseImage(sourceImageData, width, height){
 
-			var pixleCount = 0;
+			var pixelCount = 0;
 			var redTotal = 0;
 			var greenTotal = 0;
 			var blueTotal = 0;
@@ -99,7 +100,7 @@ Code has since been updated for node-resemble and in this fork.
 				var blue = sourceImageData[offset + 2];
 				var brightness = getBrightness(red,green,blue);
 
-				pixleCount++;
+				pixelCount++;
 
 				redTotal += red / 255 * 100;
 				greenTotal += green / 255 * 100;
@@ -107,10 +108,10 @@ Code has since been updated for node-resemble and in this fork.
 				brightnessTotal += brightness / 255 * 100;
 			});
 
-			data.red = Math.floor(redTotal / pixleCount);
-			data.green = Math.floor(greenTotal / pixleCount);
-			data.blue = Math.floor(blueTotal / pixleCount);
-			data.brightness = Math.floor(brightnessTotal / pixleCount);
+			data.red = Math.floor(redTotal / pixelCount);
+			data.green = Math.floor(greenTotal / pixelCount);
+			data.blue = Math.floor(blueTotal / pixelCount);
+			data.brightness = Math.floor(brightnessTotal / pixelCount);
 
 			triggerDataUpdate();
 		}
@@ -142,7 +143,9 @@ Code has since been updated for node-resemble and in this fork.
 		}
 
 		function isPixelBrightnessSimilar(d1, d2){
-			return Math.abs(d1.brightness - d2.brightness) < tolerance.minBrightness;
+			var alpha = isColorSimilar(d1.a, d2.a, 'alpha');
+			var brightness = isColorSimilar(d1.brightness, d2.brightness, 'minBrightness');
+			return brightness && alpha;
 		}
 
 		function getBrightness(r,g,b){
@@ -160,8 +163,9 @@ Code has since been updated for node-resemble and in this fork.
 			var red = isColorSimilar(d1.r,d2.r,'red');
 			var green = isColorSimilar(d1.g,d2.g,'green');
 			var blue = isColorSimilar(d1.b,d2.b,'blue');
+			var alpha = isColorSimilar(d1.a, d2.a, 'alpha');
 
-			return red && green && blue;
+			return red && green && blue && alpha;
 		}
 
 		function isContrasting(d1, d2){
@@ -247,11 +251,12 @@ Code has since been updated for node-resemble and in this fork.
 			return false;
 		}
 
-		function errorPixel(px, offset){
-			px[offset] = 255; //r
-			px[offset + 1] = 0; //g
-			px[offset + 2] = 255; //b
-			px[offset + 3] = 255; //a
+		function errorPixel(px, offset, data1, data2){
+			var data = errorPixelTransformer(data1, data2);
+			px[offset] = data.r;
+			px[offset + 1] = data.g;
+			px[offset + 2] = data.b;
+			px[offset + 3] = data.a;
 		}
 
 		function copyPixel(px, offset, data){
@@ -274,15 +279,19 @@ Code has since been updated for node-resemble and in this fork.
 			var g;
 			var b;
 			var d;
+			var a;
 
-			if(typeof data[offset] !== 'undefined'){
-				r = data[offset];
+			r = data[offset];
+
+			if(typeof r !== 'undefined'){
 				g = data[offset+1];
 				b = data[offset+2];
+				a = data[offset+3];
 				d = {
 					r: r,
 					g: g,
-					b: b
+					b: b,
+					a: a
 				};
 
 				return d;
@@ -353,7 +362,7 @@ Code has since been updated for node-resemble and in this fork.
 				}
 
 				if( isRGBSimilar(pixel1, pixel2) ){
-					copyPixel(targetPix, offset, pixel2);
+					copyPixel(targetPix, offset, pixel1, pixel2);
 
 				} else if( ignoreAntialiasing && (
 						addBrightnessInfo(pixel1), // jit pixel info augmentation looks a little weird, sorry.
@@ -369,7 +378,7 @@ Code has since been updated for node-resemble and in this fork.
 						mismatchCount++;
 					}
 				} else {
-					errorPixel(targetPix, offset);
+					errorPixel(targetPix, offset, pixel1, pixel2);
 					mismatchCount++;
 				}
 
@@ -461,6 +470,8 @@ Code has since been updated for node-resemble and in this fork.
 						data.isSameDimensions = false;
 					}
 
+					data.dimensionDifference = { width: images[0].width - images[1].width, height: images[0].height - images[1].height };
+
 					analyseImages( normalise(images[0],width, height), normalise(images[1],width, height), width, height);
 
 					triggerDataUpdate();
@@ -474,8 +485,8 @@ Code has since been updated for node-resemble and in this fork.
 
 		function getCompareApi(param){
 
-			var hasMethod = typeof param === 'function',
-					secondFileData;
+			var secondFileData,
+				hasMethod = typeof param === 'function';
 
 			if( !hasMethod ){
 				// assume it's file data
@@ -487,6 +498,7 @@ Code has since been updated for node-resemble and in this fork.
 					tolerance.red = 16;
 					tolerance.green = 16;
 					tolerance.blue = 16;
+					tolerance.alpha = 16;
 					tolerance.minBrightness = 16;
 					tolerance.maxBrightness = 240;
 
@@ -501,6 +513,7 @@ Code has since been updated for node-resemble and in this fork.
 					tolerance.red = 32;
 					tolerance.green = 32;
 					tolerance.blue = 32;
+					tolerance.alpha = 32;
 					tolerance.minBrightness = 64;
 					tolerance.maxBrightness = 96;
 
@@ -511,6 +524,7 @@ Code has since been updated for node-resemble and in this fork.
 					return self;
 				},
 				ignoreColors: function(){
+					tolerance.alpha = 16;
 					tolerance.minBrightness = 16;
 					tolerance.maxBrightness = 240;
 
